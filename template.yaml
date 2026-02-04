@@ -72,7 +72,7 @@ Resources:
       CodeUri: src/
       Role: !Sub "arn:aws:iam::${AWS::AccountId}:role/LabRole"
       Handler: update.update
-      Runtime: python3.11
+      Runtime: python3.12
       Events:
         Create:
           Type: Api
