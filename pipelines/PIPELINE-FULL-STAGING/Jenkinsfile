@@ -70,6 +70,7 @@ pipeline {
                     sh '''
                         sam validate --region us-east-1
                         sam build
+                        sleep 3
                     '''
                      deleteDir()
                 }
@@ -115,9 +116,15 @@ pipeline {
                     steps {
                         deleteDir()
                         unstash name:'code'
-                        sh '''
-                           echo peticiones http aws sam lambda
-                        '''
+                        script {
+                            def BASE_URL = sh( script: "aws cloudformation describe-stacks --stack-name todo-list-aws-staging --query 'Stacks[0].Outputs[?OutputKey==`BaseUrlApi`].OutputValue' --region us-east-1 --output text", returnStdout: true)
+                        }
+                        withEnv(['BASE_URL=${BASE_URL}']) {
+                            sh '''
+                                echo 'Init Integration Rest Testing: $BASE_URL '
+                                pytest -s test/integration/todoApiTest.py
+                            '''
+                        }
                         deleteDir()
                     }    
                 } 
