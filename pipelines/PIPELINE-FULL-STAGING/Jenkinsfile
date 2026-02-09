@@ -1,61 +1,127 @@
 pipeline {
-    agent any
+    agent none
+    environment { 
+        ENV_DB = "/opt/venv/bin"
+    }
+    options { skipDefaultCheckout() }
+
     stages {
-        
-        stage('SetUp'){
-            steps{
-                echo 'Setup Virtualenv for testing'
-                sh "bash pipelines/PIPELINE-FULL-STAGING/setup.sh"
+        stage('Get Code') {
+            agent {label 'Master'}
+            steps {
+                echo 'Access repo in branch develop'
+                git branch : 'develop',
+                    url: 'https://github.com/r4kogama/todo-list-aws.git' 
+                sh """
+                    ls -la
+                """
+                stash name:'code', includes:'**/*'
+                stash name:'src', includes:'src/**'
             }
         }
-        stage('Test'){
-            steps{
-                echo 'Static program analysis:'
-                sh "bash pipelines/PIPELINE-FULL-STAGING/static_test.sh"
-                echo 'Unit testing:'
-                sh "bash pipelines/PIPELINE-FULL-STAGING/unit_test.sh"
-            }
-            post {
-                always {
-                    script {
-                        def failed = publishCoverage (failUnhealthy: true, 
-                            globalThresholds: [[thresholdTarget: 'Line', unhealthyThreshold: 70.0]],
-                            adapters: [coberturaAdapter(
-                                mergeToOneReport: true, 
-                                path: '**/coverage.xml')])
+        stage('Statics') {
+            parallel{
+                stage('Code Analysis') {
+                    agent {label 'linux-debian'}
+                    steps{
+                        catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+                            deleteDir()
+                            unstash name:'src'
+                            sh '''
+                                $ENV_DB/flake8 --format=pylint --exit-zero app >flake8.out
+                            '''
+                            recordIssues qualityGates: [
+                                [criticality: 'NOTE', integerThreshold: 8, threshold: 8.0, type: 'TOTAL'], 
+                                [criticality: 'ERROR', integerThreshold: 10, threshold: 10.0, type: 'TOTAL']],
+                                sourceCodeRetention: 'LAST_BUILD', tools: [flake8(pattern: 'flake8.out')],
+                                unhealthy: 10
+                            deleteDir()
+                        }
                     }
                 }
-            }
-        }
-       stage('Build') {
-            steps{
-                echo 'Package sam application:'
-                sh "bash pipelines/common-steps/build.sh"
-            }
-        }
-        stage('Deploy'){
-            steps{
-                echo 'Initiating Deployment'
-                sh "bash pipelines/common-steps/deploy.sh"
-            }
-        }
-        stage('Integration Test after deploy'){
-            steps{
-                script {
-                    def BASE_URL = sh( script: "aws cloudformation describe-stacks --stack-name todo-list-aws-staging --query 'Stacks[0].Outputs[?OutputKey==`BaseUrlApi`].OutputValue' --region us-east-1 --output text",
-                        returnStdout: true)
-                    echo "$BASE_URL"
-                    echo 'Initiating Integration Tests'
-                    sh "bash pipelines/common-steps/integration.sh $BASE_URL"
+                stage('Security') {
+                    agent {label 'linux-debian'}
+                    steps{
+                        catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+                            deleteDir()
+                            unstash name:'src'
+                            sh '''
+                                $ENV_DB/bandit --exit-zero -r . -f custom -o bandit.out --msg-template "{abspath}:{line}: [{test_id}] {msg}"
+                            '''
+                            recordIssues qualityGates: [
+                                [integerThreshold: 2, threshold: 2.0, type: 'TOTAL'],
+                                [criticality: 'FAILURE', integerThreshold: 4, threshold: 4.0, type: 'TOTAL']
+                            ], 
+                            sourceCodeRetention: 'LAST_BUILD', tools: [pyLint(name: 'Bandit', pattern: 'bandit.out')], unhealthy: 4
+                            deleteDir()
+                        }
+                    }
                 }
-                   
+                
             }
         }
-    }
-    post { 
-        always { 
-            echo 'Clean env: delete dir'
-            cleanWs()
+        stage('Build'){
+            agent {label 'Master'}
+            steps {
+                echo 'Init sam application:'
+                catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+                    deleteDir()
+                    unstash name:'code'
+                    sh '''
+                        sam validate --region us-east-1
+                        sam build
+                    '''
+                     deleteDir()
+                }
+            }
+        }
+        stage('QA'){
+            agent {label 'Master'}
+            steps {
+                echo 'Initiating staging environment :'
+                catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+                    deleteDir()
+                    unstash name:'code'
+                    sh '''
+                        sam deploy --config-env staging --no-confirm-changeset --no-progressbar
+                    '''
+                     deleteDir()
+                }
+            }
+        }
+        stage('Testing'){
+             parallel{
+                stage('Unit') {
+                    agent {label 'linux-debian'}
+                    steps {
+                        deleteDir()
+                        unstash name:'code'
+                        sh '''
+                            export PYTHONPATH="${WORKSPACE}"
+                            echo mocking name table
+                            export DYNAMODB_TABLE="Name_table_todo"
+                            echo install dependencies no-permanent in agent docker
+                            $ENV_DB/pip install boto3 moto
+                            sleep 5
+                            $ENV_DB/pytest test/unit/TestToDo.py --junitxml=result-unit.xml 
+                            ls -la
+                        '''
+                        junit testResults: '**/result-*.xml', allowEmptyResults: true
+                        deleteDir()
+                    }
+                }   
+                stage('Integration Rest') {
+                    agent {label 'linux-debian'}
+                    steps {
+                        deleteDir()
+                        unstash name:'code'
+                        sh '''
+                           echo peticiones http aws sam lambda
+                        '''
+                        deleteDir()
+                    }    
+                } 
+            }
         }
     }
 }
