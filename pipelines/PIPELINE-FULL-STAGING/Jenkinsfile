@@ -11,7 +11,8 @@ pipeline {
             steps {
                 echo 'Access repo in branch develop'
                 git branch : 'develop',
-                    url: 'https://github.com/r4kogama/todo-list-aws.git' 
+                    credentialsId : 'github-ssh',
+                    url: 'git@github.com:r4kogama/todo-list-aws.git' 
                 sh """
                     ls -la
                 """
