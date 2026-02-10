@@ -122,7 +122,7 @@ pipeline {
                         withEnv(['BASE_URL=${BASE_URL}']) {
                             sh '''
                                 echo 'Init Integration Rest Testing: $BASE_URL '
-                                pytest -s test/integration/todoApiTest.py
+                                $ENV_DB/pytest -s test/integration/todoApiTest.py
                             '''
                         }
                         deleteDir()
