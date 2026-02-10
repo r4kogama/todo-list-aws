@@ -27,7 +27,7 @@ class TestApi(unittest.TestCase):
         data = {
          "text": "Integration text example"
         }
-        response = requests.post(url, data=json.dumps(data))
+        response = requests.post(url, data=json.dumps(data), headers={'Content-Type': 'application/json'})
         json_response = response.json()
         print('Response Add Todo: '+ str(json_response))
         jsonbody= json.loads(json_response['body'])
@@ -56,9 +56,9 @@ class TestApi(unittest.TestCase):
         data = {
          "text": "Integration text example"
         }
-        response = requests.post(url, data=json.dumps(data))
+        response = requests.post(url, data=json.dumps(data), headers={'Content-Type': 'application/json'})
         json_response = response.json()
-        print('Response Add Todo: '+ str(json_response))
+        print('Response Add Todo: '+ json_response['body'])
         jsonbody= json.loads(json_response['body'])
         ID_TODO = jsonbody['id']
         print ('ID todo:'+ID_TODO)
@@ -82,7 +82,7 @@ class TestApi(unittest.TestCase):
         data = {
          "text": "Integration text example - GET"
         }
-        response = requests.post(url, data=json.dumps(data))
+        response = requests.post(url, data=json.dumps(data), headers={'Content-Type': 'application/json'})
         json_response = response.json()
         print('Response Add Todo: '+ str(json_response))
         jsonbody= json.loads(json_response['body'])
@@ -120,9 +120,9 @@ class TestApi(unittest.TestCase):
         data = {
          "text": "Integration text example - Initial"
         }
-        response = requests.post(url, data=json.dumps(data))
+        response = requests.post(url, data=json.dumps(data), headers={'Content-Type': 'application/json'})
         json_response = response.json()
-        print('Response Add todo: ' + str(json_response))
+        print('Response Add todo: ' + json_response['body'])
         jsonbody= json.loads(json_response['body'])
         ID_TODO = jsonbody['id']
         print ('ID todo:'+ID_TODO)
@@ -138,7 +138,7 @@ class TestApi(unittest.TestCase):
          "text": "Integration text example - Modified",
          "checked": "true"
         }
-        response = requests.put(url, data=json.dumps(data))
+        response = requests.put(url, data=json.dumps(data), headers={'Content-Type': 'application/json'})
         json_response = response.json()
         print('Response Update todo: ' + str(json_response))
         #jsonbody= json.loads(json_response['body'])
@@ -173,9 +173,9 @@ class TestApi(unittest.TestCase):
         data = {
          "text": "Integration text example - Initial"
         }
-        response = requests.post(url, data=json.dumps(data))
+        response = requests.post(url, data=json.dumps(data), headers={'Content-Type': 'application/json'})
         json_response = response.json()
-        print('Response Add todo: ' + str(json_response))
+        print('Response Add todo: ' + json_response['body'])
         jsonbody= json.loads(json_response['body'])
         ID_TODO = jsonbody['id']
         print ('ID todo:'+ID_TODO)
