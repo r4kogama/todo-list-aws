@@ -27,9 +27,9 @@ pipeline {
                         catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
                             deleteDir()
                             unstash name:'src'
-                            sh '''
+                            sh """
                                 $ENV_DB/flake8 --format=pylint --exit-zero app >flake8.out
-                            '''
+                            """
                             recordIssues qualityGates: [
                                 [criticality: 'NOTE', integerThreshold: 8, threshold: 8.0, type: 'TOTAL'], 
                                 [criticality: 'ERROR', integerThreshold: 10, threshold: 10.0, type: 'TOTAL']],
@@ -45,9 +45,9 @@ pipeline {
                         catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
                             deleteDir()
                             unstash name:'src'
-                            sh '''
+                            sh """
                                 $ENV_DB/bandit --exit-zero -r . -f custom -o bandit.out --msg-template "{abspath}:{line}: [{test_id}] {msg}"
-                            '''
+                            """
                             recordIssues qualityGates: [
                                 [integerThreshold: 2, threshold: 2.0, type: 'TOTAL'],
                                 [criticality: 'FAILURE', integerThreshold: 4, threshold: 4.0, type: 'TOTAL']
@@ -57,7 +57,6 @@ pipeline {
                         }
                     }
                 }
-                
             }
         }
         stage('Build'){
@@ -67,37 +66,45 @@ pipeline {
                 catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
                     deleteDir()
                     unstash name:'code'
-                    sh '''
+                    sh """
                         sam validate --region us-east-1
                         sam build
                         sleep 3
-                    '''
+                    """
                      deleteDir()
                 }
             }
         }
-        stage('QA'){
+        stage('Deploy'){
             agent {label 'Master'}
             steps {
                 echo 'Initiating staging environment :'
                 catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
                     deleteDir()
                     unstash name:'code'
-                    sh '''
-                        sam deploy --config-env staging --no-confirm-changeset --no-progressbar
-                    '''
-                     deleteDir()
+                    sh """
+                        sam deploy --no-fail-on-empty-changeset --config-env staging --no-confirm-changeset --no-progressbar
+                    """
+                    script {
+                        def BASE_URL = sh( script: "aws cloudformation describe-stacks --stack-name todo-list-aws-staging --query 'Stacks[0].Outputs[?OutputKey==`BaseUrlApi`].OutputValue' --region us-east-1 --output text", returnStdout: true)
+
+                        echo "Base url Sam: ${BASE_URL}"
+                        writeFile file: 'base_url.txt', text: BASE_URL
+                    }
+                    
+                    stash name:'base_url', includes:'base_url.txt', useDefaultExcludes: false
+                    deleteDir()
                 }
             }
         }
         stage('Testing'){
-             parallel{
+            parallel{
                 stage('Unit') {
                     agent {label 'linux-debian'}
                     steps {
                         deleteDir()
                         unstash name:'code'
-                        sh '''
+                        sh """
                             export PYTHONPATH="${WORKSPACE}"
                             echo mocking name table
                             export DYNAMODB_TABLE="Name_table_todo"
@@ -106,7 +113,7 @@ pipeline {
                             sleep 5
                             $ENV_DB/pytest test/unit/TestToDo.py --junitxml=result-unit.xml 
                             ls -la
-                        '''
+                        """
                         junit testResults: '**/result-*.xml', allowEmptyResults: true
                         deleteDir()
                     }
@@ -116,14 +123,16 @@ pipeline {
                     steps {
                         deleteDir()
                         unstash name:'code'
+                        unstash name:'base_url'
                         script {
-                            def BASE_URL = sh( script: "aws cloudformation describe-stacks --stack-name todo-list-aws-staging --query 'Stacks[0].Outputs[?OutputKey==`BaseUrlApi`].OutputValue' --region us-east-1 --output text", returnStdout: true)
-                        }
-                        withEnv(['BASE_URL=${BASE_URL}']) {
-                            sh '''
-                                echo 'Init Integration Rest Testing: $BASE_URL '
-                                $ENV_DB/pytest -s test/integration/todoApiTest.py
-                            '''
+                            def BASE_URL = readFile('base_url.txt')
+                            echo "${BASE_URL}"
+                            withEnv(["BASE_URL=${BASE_URL}"]) {
+                                sh """
+                                    echo 'Init Integration Rest Testing: $BASE_URL'
+                                    $ENV_DB/pytest -s test/integration/todoApiTest.py
+                                """
+                            }
                         }
                         deleteDir()
                     }    
