@@ -87,7 +87,9 @@ pipeline {
                         sam deploy --no-fail-on-empty-changeset --config-env staging --no-confirm-changeset --no-progressbar
                     """
                     script {
-                        def BASE_URL = sh( script: "aws cloudformation describe-stacks --stack-name todo-list-aws-staging --query 'Stacks[0].Outputs[?OutputKey==`BaseUrlApi`].OutputValue' --region us-east-1 --output text", returnStdout: true)
+                        def BASE_URL = sh( 
+                        script: "aws cloudformation describe-stacks --stack-name todo-list-aws-staging --query 'Stacks[0].Outputs[?OutputKey==`BaseUrlApi`].OutputValue' --region us-east-1 --output text",
+                        returnStdout: true).trim()
 
                         echo "Base url Sam: ${BASE_URL}"
                         writeFile file: 'base_url.txt', text: BASE_URL
@@ -127,10 +129,9 @@ pipeline {
                         unstash name:'base_url'
                         script {
                             def BASE_URL = readFile('base_url.txt')
-                            echo "${BASE_URL}"
                             withEnv(["BASE_URL=${BASE_URL}"]) {
                                 sh """
-                                    echo 'Init Integration Rest Testing: $BASE_URL'
+                                    echo "Init Integration Rest Testing: $BASE_URL"
                                     $ENV_DB/pytest -s test/integration/todoApiTest.py
                                 """
                             }
