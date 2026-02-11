@@ -1,7 +1,7 @@
 pipeline {
     agent none
     environment { 
-        ENV_DB = "/opt/venv/bin"
+        ENV_UB = "/usr/bin/"
     }
     options { skipDefaultCheckout() }
 
@@ -16,20 +16,20 @@ pipeline {
                 sh """
                     ls -la
                 """
-                stash name:'code', includes:'**/*'
-                stash name:'src', includes:'src/**'
+                stash name:'code', includes:'**/*', useDefaultExcludes: false
+                stash name:'src', includes:'src/**' 
             }
         }
         stage('Statics') {
             parallel{
                 stage('Code Analysis') {
-                    agent {label 'linux-debian'}
+                    agent {label 'Master'}
                     steps{
                         catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
                             deleteDir()
                             unstash name:'src'
                             sh """
-                                $ENV_DB/flake8 --format=pylint --exit-zero app >flake8.out
+                                $ENV_UB/flake8 --format=pylint --exit-zero app >flake8.out
                             """
                             recordIssues qualityGates: [
                                 [criticality: 'NOTE', integerThreshold: 8, threshold: 8.0, type: 'TOTAL'], 
@@ -41,13 +41,13 @@ pipeline {
                     }
                 }
                 stage('Security') {
-                    agent {label 'linux-debian'}
+                    agent {label 'Master'}
                     steps{
                         catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
                             deleteDir()
                             unstash name:'src'
                             sh """
-                                $ENV_DB/bandit --exit-zero -r . -f custom -o bandit.out --msg-template "{abspath}:{line}: [{test_id}] {msg}"
+                                $ENV_UB/bandit --exit-zero -r . -f custom -o bandit.out --msg-template "{abspath}:{line}: [{test_id}] {msg}"
                             """
                             recordIssues qualityGates: [
                                 [integerThreshold: 2, threshold: 2.0, type: 'TOTAL'],
@@ -86,16 +86,6 @@ pipeline {
                     sh """
                         sam deploy --no-fail-on-empty-changeset --config-env staging --no-confirm-changeset --no-progressbar
                     """
-                    script {
-                        def BASE_URL = sh( 
-                        script: "aws cloudformation describe-stacks --stack-name todo-list-aws-staging --query 'Stacks[0].Outputs[?OutputKey==`BaseUrlApi`].OutputValue' --region us-east-1 --output text",
-                        returnStdout: true).trim()
-
-                        echo "Base url Sam: ${BASE_URL}"
-                        writeFile file: 'base_url.txt', text: BASE_URL
-                    }
-                    
-                    stash name:'base_url', includes:'base_url.txt', useDefaultExcludes: false
                     deleteDir()
                 }
             }
@@ -103,7 +93,7 @@ pipeline {
         stage('Testing'){
             parallel{
                 stage('Unit') {
-                    agent {label 'linux-debian'}
+                    agent {label 'Master'}
                     steps {
                         deleteDir()
                         unstash name:'code'
@@ -111,10 +101,7 @@ pipeline {
                             export PYTHONPATH="${WORKSPACE}"
                             echo mocking name table
                             export DYNAMODB_TABLE="Name_table_todo"
-                            echo install dependencies no-permanent in agent docker
-                            $ENV_DB/pip install boto3 moto
-                            sleep 5
-                            $ENV_DB/pytest test/unit/TestToDo.py --junitxml=result-unit.xml 
+                            $ENV_UB/pytest test/unit/TestToDo.py --junitxml=result-unit.xml 
                             ls -la
                         """
                         junit testResults: '**/result-*.xml', allowEmptyResults: true
@@ -122,17 +109,18 @@ pipeline {
                     }
                 }   
                 stage('Integration Rest') {
-                    agent {label 'linux-debian'}
+                    agent {label 'Master'}
                     steps {
                         deleteDir()
                         unstash name:'code'
-                        unstash name:'base_url'
                         script {
-                            def BASE_URL = readFile('base_url.txt')
+                            def BASE_URL = sh( 
+                            script: "aws cloudformation describe-stacks --stack-name todo-list-aws-staging --query 'Stacks[0].Outputs[?OutputKey==`BaseUrlApi`].OutputValue' --region us-east-1 --output text",
+                            returnStdout: true).trim()
                             withEnv(["BASE_URL=${BASE_URL}"]) {
                                 sh """
                                     echo "Init Integration Rest Testing: $BASE_URL"
-                                    $ENV_DB/pytest -s test/integration/todoApiTest.py
+                                    $ENV_UB/pytest -s test/integration/todoApiTest.py
                                 """
                             }
                         }
