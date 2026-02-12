@@ -1,0 +1,185 @@
+def getDataAgent() {
+    return 'whoami\nhostname\necho ${WORKSPACE}'
+} 
+pipeline {
+    agent none
+    environment { 
+        ENV_DB = "/opt/venv/bin"
+    }
+    options { skipDefaultCheckout() }
+
+    stages {
+        stage('Get Code') {
+            agent {label 'Master'}
+           steps {
+                echo 'Access repo in branch develop'
+                git branch : 'develop',
+                    credentialsId : 'github-ssh',
+                    url: 'git@github.com:r4kogama/todo-list-aws.git' 
+                sh """
+                    ls -la
+                """
+                //useDefaultExcludes required to include git folder
+                stash name:'code', includes:'**/*', useDefaultExcludes: false
+                stash name:'src', includes:'src/**' 
+            }
+        }
+        stage('Install dependencies') {
+            agent {label 'linux-debian'}
+            steps {
+                sh getDataAgent() 
+                echo Install dependencies  no-permanent in agent docker for unit test
+                sh """
+                    $ENV_DB/pip install boto3 moto
+                """
+            }
+        }
+        stage('Statics') {
+            parallel{
+                stage('Code Analysis') {
+                    agent {label 'linux-debian'}
+                    steps{
+                        catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+                            deleteDir()
+                            unstash name:'src'
+                            sh getDataAgent() 
+                            sh """
+                                $ENV_DB/flake8 --format=pylint --exit-zero app >flake8.out
+                            """
+                            recordIssues qualityGates: [
+                                [criticality: 'NOTE', integerThreshold: 8, threshold: 8.0, type: 'TOTAL'], 
+                                [criticality: 'ERROR', integerThreshold: 10, threshold: 10.0, type: 'TOTAL']],
+                                sourceCodeRetention: 'LAST_BUILD', tools: [flake8(pattern: 'flake8.out')],
+                                unhealthy: 10
+                            deleteDir()
+                        }
+                    }
+                }
+                stage('Security') {
+                    agent {label 'linux-debian'}
+                    steps{
+                        catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+                            deleteDir()
+                            unstash name:'src'
+                            sh getDataAgent() 
+                            sh """
+                                $ENV_DB/bandit --exit-zero -r . -f custom -o bandit.out --msg-template "{abspath}:{line}: [{test_id}] {msg}"
+                            """
+                            recordIssues qualityGates: [
+                                [integerThreshold: 2, threshold: 2.0, type: 'TOTAL'],
+                                [criticality: 'FAILURE', integerThreshold: 4, threshold: 4.0, type: 'TOTAL']
+                            ], 
+                            sourceCodeRetention: 'LAST_BUILD', tools: [pyLint(name: 'Bandit', pattern: 'bandit.out')], unhealthy: 4
+                            deleteDir()
+                        }
+                    }
+                }
+            }
+        }
+        stage('Build'){
+            agent {label 'Master'}
+            steps {
+                echo 'Init sam application:'
+                catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+                    deleteDir()
+                    unstash name:'code'
+                    sh getDataAgent() 
+                    sh """
+                        sam validate --region us-east-1
+                        sam build
+                        sleep 3
+                    """
+                     deleteDir()
+                }
+            }
+        }
+        stage('Deploy'){
+            agent {label 'Master'}
+            steps {
+                echo 'Initiating staging environment :'
+                catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+                    deleteDir()
+                    unstash name:'code'
+                    sh getDataAgent() 
+                    sh """
+                        sam deploy --no-fail-on-empty-changeset --config-env staging --no-confirm-changeset --no-progressbar
+                    """
+                    script {
+                        def BASE_URL = sh( 
+                        script: "aws cloudformation describe-stacks --stack-name todo-list-aws-staging --query 'Stacks[0].Outputs[?OutputKey==`BaseUrlApi`].OutputValue' --region us-east-1 --output text",
+                        returnStdout: true).trim()
+
+                        echo "Base url Sam: ${BASE_URL}"
+                        writeFile file: 'base_url.txt', text: BASE_URL
+                        ls -la
+                    }
+                    
+                    stash name:'base_url', includes:'base_url.txt', useDefaultExcludes: false
+                    deleteDir()
+                }
+            }
+        }
+        stage('Testing'){
+            parallel{
+                stage('Unit') {
+                    agent {label 'linux-debian'}
+                    steps {
+                        deleteDir()
+                        unstash name:'code'
+                        sh getDataAgent() 
+                        sh """
+                            export PYTHONPATH="${WORKSPACE}"
+                            echo mocking name table
+                            export DYNAMODB_TABLE="Name_table_todo"
+                            $ENV_DB/pytest test/unit/TestToDo.py --junitxml=result-unit.xml 
+                            ls -la
+                        """
+                        junit testResults: '**/result-*.xml', allowEmptyResults: true
+                        deleteDir()
+                    }
+                }   
+                stage('Integration Rest') {
+                    agent {label 'linux-debian'}
+                    steps {
+                        deleteDir()
+                        unstash name:'code'
+                        unstash name:'base_url'
+                        script {
+                            def BASE_URL = readFile('base_url.txt')
+                            withEnv(["BASE_URL=${BASE_URL}"]) {
+                                sh getDataAgent() 
+                                sh """
+                                    ls -la
+                                    echo "Init Integration Rest Testing: $BASE_URL"
+                                    $ENV_DB/pytest -s test/integration/todoApiTest.py
+                                """
+                            }
+                        }
+                        deleteDir()
+                    }    
+                } 
+            }
+        }
+        stage('Promote'){
+            agent {label 'Master'}
+            steps {
+                unstash name:'code'
+                echo 'Merging develop branch to the master branch'
+                sshagent(credentials: ['github-ssh']) {
+                    sh """
+                        set -x
+                        git config user.email "thecureomd@gmail.com"
+                        git config user.name "raul garcia"
+                        git checkout develop
+                        git pull origin develop
+                        git checkout master
+                        git pull origin master
+                        git merge develop
+                        git push origin master
+                    """
+                }
+                deleteDir()
+            }
+        }
+    }
+}
