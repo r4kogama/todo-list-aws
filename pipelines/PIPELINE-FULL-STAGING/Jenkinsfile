@@ -129,26 +129,6 @@ pipeline {
                 }
             }
         }
-        stage('Promote'){
-            agent {label 'Master'}
-            steps {
-                unstash name:'code'
-                echo 'Merging develop branch to the master branch'
-                sshagent(credentials: ['github-ssh']) {
-                    sh """
-                        set -x
-                        git config user.email "thecureomd@gmail.com"
-                        git config user.name "raul garcia"
-                        git checkout develop
-                        git pull origin develop
-                        git checkout master
-                        git pull origin master
-                        git merge develop
-                        git push origin master
-                    """
-                }
-                deleteDir()
-            }
-        }
+       
     }
 }
