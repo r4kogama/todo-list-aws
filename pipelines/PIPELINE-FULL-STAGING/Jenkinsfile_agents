@@ -9,29 +9,34 @@ pipeline {
     options { skipDefaultCheckout() }
 
     stages {
-        stage('Get Code') {
-            agent {label 'Master'}
-           steps {
-                echo 'Access repo in branch develop'
-                git branch : 'develop',
-                    credentialsId : 'github-ssh',
-                    url: 'git@github.com:r4kogama/todo-list-aws.git' 
-                sh """
-                    ls -la
-                """
-                //useDefaultExcludes required to include git folder
-                stash name:'code', includes:'**/*', useDefaultExcludes: false
-                stash name:'src', includes:'src/**' 
-            }
-        }
-        stage('Install dependencies') {
-            agent {label 'linux-debian'}
-            steps {
-                sh getDataAgent() 
-                echo 'Install dependencies  no-permanent in agent docker for unit test'
-                sh """
-                    $ENV_DB/pip install boto3 moto
-                """
+        stage('Get code & dependencies') {
+            parallel{
+                stage('Checkout scm') {
+                    agent {label 'Master'}
+                   steps {
+                        echo 'Access repo in branch develop'
+                        git branch : 'develop',
+                            credentialsId : 'github-ssh',
+                            url: 'git@github.com:r4kogama/todo-list-aws.git' 
+                        sh """
+                            ls -la
+                        """
+                        //useDefaultExcludes required to include git folder
+                        stash name:'code', includes:'**/*', useDefaultExcludes: false
+                        stash name:'src', includes:'src/**' 
+                    }
+                }
+                stage('Install dependencies') {
+                    agent {label 'linux-debian'}
+                    steps {
+                        sh getDataAgent() 
+                        echo 'Install dependencies  no-permanent in agent docker for unit test'
+                        sh """
+                            $ENV_DB/pip install boto3 moto
+                        """
+                    }
+                }
+            
             }
         }
         stage('Statics') {
@@ -108,10 +113,9 @@ pipeline {
                         def BASE_URL = sh( 
                         script: "aws cloudformation describe-stacks --stack-name todo-list-aws-staging --query 'Stacks[0].Outputs[?OutputKey==`BaseUrlApi`].OutputValue' --region us-east-1 --output text",
                         returnStdout: true).trim()
-
+                        
                         echo "Base url Sam: ${BASE_URL}"
                         writeFile file: 'base_url.txt', text: BASE_URL
-                        ls -la
                     }
                     
                     stash name:'base_url', includes:'base_url.txt', useDefaultExcludes: false
