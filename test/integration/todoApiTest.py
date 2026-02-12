@@ -4,6 +4,7 @@ import unittest
 from urllib.request import urlopen
 import requests
 import json
+import time
 
 import pytest
 
@@ -68,6 +69,7 @@ class TestApi(unittest.TestCase):
         self.assertEqual(
             jsonbody['text'], "Integration text example", "Error en la petición API a {url}"
         )
+        time.sleep(2)
         url = url+"/"+ID_TODO
         response = requests.delete(url)
         self.assertEqual(
