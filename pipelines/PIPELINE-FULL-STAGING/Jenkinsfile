@@ -126,7 +126,25 @@ pipeline {
                         }
                         deleteDir()
                     }    
-                } 
+                }
+                stage('Promote'){
+                    agent {label 'Master'}
+                    steps {
+                        unstash name:'code'
+                        echo 'Merging develop branch to the master branch'
+                        sshagent(['github-ssh']) {
+                            sh script: """
+                                set -x
+                                git branch -a
+                                git checkout develop 
+                                git checkout master 
+                                git merge develop
+                                git push origin master
+                            """, label: "Merging code to master"
+                        }
+                        deleteDir()
+                    }
+                }
             }
         }
     }
