@@ -28,7 +28,7 @@ pipeline {
             agent {label 'linux-debian'}
             steps {
                 sh getDataAgent() 
-                echo Install dependencies  no-permanent in agent docker for unit test
+                echo 'Install dependencies  no-permanent in agent docker for unit test'
                 sh """
                     $ENV_DB/pip install boto3 moto
                 """
