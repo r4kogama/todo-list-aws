@@ -127,7 +127,6 @@ pipeline {
                         deleteDir()
                     }    
                 }
-                
             }
         }
         stage('Promote'){
@@ -135,15 +134,18 @@ pipeline {
             steps {
                 unstash name:'code'
                 echo 'Merging develop branch to the master branch'
-                sshagent(['github-ssh']) {
-                    sh script: """
+                sshagent(credentials: ['github-ssh']) {
+                    sh """
                         set -x
-                        git branch -a
-                        git checkout develop 
-                        git checkout master 
+                        git config user.email "thecureomd@gmail.com"
+                        git config user.name "raul garcia"
+                        git checkout develop
+                        git pull origin develop
+                        git checkout master
+                        git pull origin master
                         git merge develop
                         git push origin master
-                    """, label: "Merging code to master"
+                    """
                 }
                 deleteDir()
             }
