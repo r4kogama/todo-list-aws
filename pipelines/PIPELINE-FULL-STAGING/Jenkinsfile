@@ -126,7 +126,7 @@ pipeline {
                         }
                         deleteDir()
                     }    
-                }
+                } 
             }
         }
         stage('Promote'){
@@ -138,7 +138,7 @@ pipeline {
                     sh """
                         set -x
                         git config user.email "thecureomd@gmail.com"
-                        git config user.name "Raul Garcia"
+                        git config user.name "raul garcia"
                         git checkout develop
                         git pull origin develop
                         git checkout master
