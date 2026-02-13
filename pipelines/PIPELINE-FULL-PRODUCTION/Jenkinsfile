@@ -1,0 +1,74 @@
+pipeline {
+    agent none
+    environment { 
+        ENV_UB = "/usr/bin/"
+    }
+    options { skipDefaultCheckout() }
+
+    stages {
+        stage('Get Code') {
+            agent {label 'Master'}
+            steps {
+                echo 'Access repo in branch develop'
+                git branch : 'master',
+                    credentialsId : 'github-ssh',
+                    url: 'git@github.com:r4kogama/todo-list-aws.git' 
+                sh """
+                    ls -la
+                """
+                stash name:'code', includes:'**/*', useDefaultExcludes: false
+            }
+        }
+        stage('Build'){
+            agent {label 'Master'}
+            steps {
+                echo 'Init sam application:'
+                catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+                    deleteDir()
+                    unstash name:'code'
+                    sh """
+                        sam validate --region us-east-1
+                        sam build
+                        sleep 3
+                    """
+                     deleteDir()
+                }
+            }
+        }
+        stage('Deploy'){
+            agent {label 'Master'}
+            steps {
+                echo 'Initiating staging environment :'
+                catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+                    deleteDir()
+                    unstash name:'code'
+                    sh """
+                        sam deploy --no-fail-on-empty-changeset --config-env production --no-confirm-changeset --no-progressbar
+                    """
+                    deleteDir()
+                }
+            }
+        }
+        stage('Testing'){
+            stage('Integration Rest') {
+                agent {label 'Master'}
+                steps {
+                    deleteDir()
+                    unstash name:'code'
+                    script {
+                        def BASE_URL = sh( 
+                        script: "aws cloudformation describe-stacks --stack-name todo-list-aws-production --query 'Stacks[0].Outputs[?OutputKey==`BaseUrlApi`].OutputValue' --region us-east-1 --output text",
+                        returnStdout: true).trim()
+                        withEnv(["BASE_URL=${BASE_URL}"]) {
+                            sh """
+                                echo "Init Integration Rest Testing: $BASE_URL"
+                                $ENV_UB/pytest -s -k "test_api_listtodos or test_api_gettodo" test/integration/todoApiTest.py
+                            """
+                        }
+                    }
+                    deleteDir()
+                }    
+            } 
+        }
+    }
+}

@@ -168,6 +168,7 @@ pipeline {
             agent {label 'Master'}
             steps {
                 unstash name:'code'
+                sh getDataAgent()
                 echo 'Merging develop branch to the master branch'
                 sshagent(credentials: ['github-ssh']) {
                     sh """
