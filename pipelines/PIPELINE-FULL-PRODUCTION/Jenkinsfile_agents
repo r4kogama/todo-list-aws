@@ -51,11 +51,11 @@ pipeline {
                     unstash name:'code'
                     sh getDataAgent() 
                     sh """
-                        sam deploy --no-fail-on-empty-changeset --config-env staging --no-confirm-changeset --no-progressbar
+                        sam deploy --no-fail-on-empty-changeset --config-env production --no-confirm-changeset --no-progressbar
                     """
                     script {
                         def BASE_URL = sh( 
-                        script: "aws cloudformation describe-stacks --stack-name todo-list-aws-staging --query 'Stacks[0].Outputs[?OutputKey==`BaseUrlApi`].OutputValue' --region us-east-1 --output text",
+                        script: "aws cloudformation describe-stacks --stack-name todo-list-aws-production --query 'Stacks[0].Outputs[?OutputKey==`BaseUrlApi`].OutputValue' --region us-east-1 --output text",
                         returnStdout: true).trim()
                         
                         echo "Base url Sam: ${BASE_URL}"
