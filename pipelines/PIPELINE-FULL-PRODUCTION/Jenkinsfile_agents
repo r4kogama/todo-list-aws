@@ -1,0 +1,91 @@
+def getDataAgent() {
+    return 'whoami\nhostname\necho ${WORKSPACE}'
+} 
+pipeline {
+    agent none
+    environment { 
+        ENV_DB = "/opt/venv/bin"
+    }
+    options { skipDefaultCheckout() }
+
+    stages {
+        stage('Checkout scm') {
+            agent {label 'Master'}
+            steps {
+                echo 'Access repo in branch develop'
+                git branch : 'master',
+                    credentialsId : 'github-ssh',
+                    url: 'git@github.com:r4kogama/todo-list-aws.git' 
+                sh getDataAgent()
+                sh """
+                    ls -la
+                """
+                //useDefaultExcludes required to include git folder
+                stash name:'code', includes:'**/*', useDefaultExcludes: false
+                stash name:'src', includes:'src/**' 
+            }
+        }
+        stage('Build'){
+            agent {label 'Master'}
+            steps {
+                echo 'Init sam application:'
+                catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+                    deleteDir()
+                    unstash name:'code'
+                    sh getDataAgent() 
+                    sh """
+                        sam validate --region us-east-1
+                        sam build
+                        sleep 3
+                    """
+                     deleteDir()
+                }
+            }
+        }
+        stage('Deploy'){
+            agent {label 'Master'}
+            steps {
+                echo 'Initiating staging environment :'
+                catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+                    deleteDir()
+                    unstash name:'code'
+                    sh getDataAgent() 
+                    sh """
+                        sam deploy --no-fail-on-empty-changeset --config-env staging --no-confirm-changeset --no-progressbar
+                    """
+                    script {
+                        def BASE_URL = sh( 
+                        script: "aws cloudformation describe-stacks --stack-name todo-list-aws-staging --query 'Stacks[0].Outputs[?OutputKey==`BaseUrlApi`].OutputValue' --region us-east-1 --output text",
+                        returnStdout: true).trim()
+                        
+                        echo "Base url Sam: ${BASE_URL}"
+                        writeFile file: 'base_url.txt', text: BASE_URL
+                    }
+                    
+                    stash name:'base_url', includes:'base_url.txt', useDefaultExcludes: false
+                    deleteDir()
+                }
+            }
+        }
+        stage('Integration Rest') {
+            agent {label 'linux-debian'}
+            steps {
+                deleteDir()
+                unstash name:'code'
+                unstash name:'base_url'
+                script {
+                    def BASE_URL = readFile('base_url.txt')
+                    withEnv(["BASE_URL=${BASE_URL}"]) {
+                        sh getDataAgent() 
+                        sh """
+                            ls -la
+                            echo "Init Integration Rest Testing: $BASE_URL"
+                            $ENV_UB/pytest -s test/integration/todoApiTest.py::test_api_listtodos test/integration/todoApiTest.py::test_api_gettodo
+                        """
+                    }
+                }
+                deleteDir()
+            }    
+        } 
+    }
+}
