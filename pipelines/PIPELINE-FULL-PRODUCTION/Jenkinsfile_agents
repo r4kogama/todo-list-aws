@@ -80,7 +80,7 @@ pipeline {
                         sh """
                             ls -la
                             echo "Init Integration Rest Testing: $BASE_URL"
-                            $ENV_DB/pytest -s test/integration/todoApiTest.py::test_api_listtodos test/integration/todoApiTest.py::test_api_gettodo
+                            $ENV_DB/pytest -s test/integration/todoApiTest.py::TestApi::test_api_listtodos test/integration/todoApiTest.py::TestApi::test_api_gettodo
                         """
                     }
                 }
