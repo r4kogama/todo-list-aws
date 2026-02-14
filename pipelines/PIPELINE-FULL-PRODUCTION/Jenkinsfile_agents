@@ -12,7 +12,7 @@ pipeline {
         stage('Checkout scm') {
             agent {label 'Master'}
             steps {
-                echo 'Access repo in branch develop'
+                echo 'Access repo in branch master'
                 git branch : 'master',
                     credentialsId : 'github-ssh',
                     url: 'git@github.com:r4kogama/todo-list-aws.git' 
@@ -80,7 +80,7 @@ pipeline {
                         sh """
                             ls -la
                             echo "Init Integration Rest Testing: $BASE_URL"
-                            $ENV_UB/pytest -s test/integration/todoApiTest.py::test_api_listtodos test/integration/todoApiTest.py::test_api_gettodo
+                            $ENV_DB/pytest -s test/integration/todoApiTest.py::test_api_listtodos test/integration/todoApiTest.py::test_api_gettodo
                         """
                     }
                 }
