@@ -6,7 +6,10 @@ pipeline {
     environment { 
         ENV_DB = "/opt/venv/bin"
     }
-    options { skipDefaultCheckout() }
+     options { 
+        skipDefaultCheckout()
+        disableConcurrentBuilds()
+    }
 
     stages {
         stage('Get code & dependencies') {
