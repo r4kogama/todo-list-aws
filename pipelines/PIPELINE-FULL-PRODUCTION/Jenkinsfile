@@ -9,7 +9,7 @@ pipeline {
     }
 
     stages {
-        stage('Get Code') {
+        stage('Checkout scm') {
             agent {label 'Master'}
             steps {
                 echo 'Access repo in branch master'
