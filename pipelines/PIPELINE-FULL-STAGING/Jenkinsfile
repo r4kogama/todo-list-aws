@@ -138,6 +138,7 @@ pipeline {
                 sshagent(credentials: ['github-ssh']) {
                     sh """
                         set -x
+                        git config url."git@github.com:".insteadOf "https://github.com"
                         git config user.email "thecureomd@gmail.com"
                         git config user.name "raul garcia"
                         git remote set-branches --add origin master
