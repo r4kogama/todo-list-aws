@@ -142,6 +142,7 @@ pipeline {
                         git config user.name "raul garcia"
                         git checkout develop
                         git pull origin develop
+                        git fetch origin master:master
                         git checkout master
                         git pull origin master
                         git merge develop
