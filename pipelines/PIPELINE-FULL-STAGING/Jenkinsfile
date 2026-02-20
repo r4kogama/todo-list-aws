@@ -140,9 +140,10 @@ pipeline {
                         set -x
                         git config user.email "thecureomd@gmail.com"
                         git config user.name "raul garcia"
+                        git fetch origin master:master
+                        git remote set-url origin git@github.com:r4kogama/todo-list-aws.git
                         git checkout develop
                         git pull origin develop
-                        git fetch origin master:master
                         git checkout master
                         git pull origin master
                         git merge develop
