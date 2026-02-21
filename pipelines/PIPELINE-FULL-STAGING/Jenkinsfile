@@ -135,12 +135,15 @@ pipeline {
             steps {
                 unstash name:'code'
                 echo 'Merging develop branch to the master branch'
-                sshagent(credentials: ['github-ssh']) {
+                withCredentials([
+                        usernamePassword(credentialsId: 'token-github', 
+                        usernameVariable: 'USERNAME', 
+                        passwordVariable: 'PASSWORD')]) {
                     sh """
                         set -x
-                        git config url."git@github.com:".insteadOf "https://github.com"
                         git config user.email "thecureomd@gmail.com"
                         git config user.name "raul garcia"
+                        git remote set-url origin https://${USERNAME}:${PASSWORD}@github.com/r4kogama/todo-list-aws.git
                         git remote set-branches --add origin master
                         git fetch origin master
                         git checkout master
