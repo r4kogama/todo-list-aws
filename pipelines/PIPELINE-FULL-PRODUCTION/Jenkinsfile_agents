@@ -25,7 +25,6 @@ pipeline {
                 """
                 //useDefaultExcludes required to include git folder
                 stash name:'code', includes:'**/*', useDefaultExcludes: false
-                stash name:'src', includes:'src/**' 
             }
         }
         stage('Build'){

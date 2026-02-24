@@ -26,7 +26,6 @@ pipeline {
                         """
                         //useDefaultExcludes required to include git folder
                         stash name:'code', includes:'**/*', useDefaultExcludes: false
-                        stash name:'src', includes:'src/**' 
                     }
                 }
                 stage('Install dependencies') {
@@ -49,7 +48,7 @@ pipeline {
                     steps{
                         catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
                             deleteDir()
-                            unstash name:'src'
+                            unstash name:'code'
                             sh getDataAgent() 
                             sh """
                                 $ENV_DB/flake8 --format=pylint --exit-zero app >flake8.out
@@ -68,7 +67,7 @@ pipeline {
                     steps{
                         catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
                             deleteDir()
-                            unstash name:'src'
+                            unstash name:'code'
                             sh getDataAgent() 
                             sh """
                                 $ENV_DB/bandit --exit-zero -r . -f custom -o bandit.out --msg-template "{abspath}:{line}: [{test_id}] {msg}"
