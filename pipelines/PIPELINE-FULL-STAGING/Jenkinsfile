@@ -138,7 +138,7 @@ pipeline {
                         usernamePassword(credentialsId: 'token-github', 
                         usernameVariable: 'USERNAME', 
                         passwordVariable: 'PASSWORD')]) {
-                    sh """
+                    sh '''
                         set -x
                         git config user.email "thecureomd@gmail.com"
                         git config user.name "raul garcia"
@@ -148,7 +148,7 @@ pipeline {
                         git checkout master
                         git merge origin/develop
                         git push origin master
-                    """
+                    '''
                 }
                 deleteDir()
             }
