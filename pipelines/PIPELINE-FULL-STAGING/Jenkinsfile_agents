@@ -17,7 +17,7 @@ pipeline {
                 stage('Checkout scm') {
                     agent {label 'Master'}
                    steps {
-                        echo 'Access repo in branch develop'
+                        echo 'Access repo in branch ${env.BRANCH_NAME}'
                         git branch : 'develop',
                             credentialsId : 'github-ssh',
                             url: 'git@github.com:r4kogama/todo-list-aws.git' 
