@@ -153,6 +153,7 @@ pipeline {
                         git remote set-branches --add origin master
                         git fetch origin master
                         git checkout master
+                        git pull origin master
                         git merge origin/develop
                         git push origin master
                     '''
