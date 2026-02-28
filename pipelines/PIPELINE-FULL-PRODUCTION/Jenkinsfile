@@ -12,11 +12,16 @@ pipeline {
         stage('Checkout scm') {
             agent {label 'Master'}
             steps {
-                echo 'Access repo in branch master'
+                echo 'Access repo in branch ${env.BRANCH_NAME}'
                 checkout scm
-                sh """
-                    ls -la
-                """
+                script{
+                    echo "Dowmload samconfig from repo todo-list-aws-config of branch: production"
+                    sh """
+                        curl -o samconfig.toml \
+                        https://raw.githubusercontent.com/r4kogama/todo-list-aws-config/refs/heads/production/samconfig.toml
+                        ls -la 
+                    """
+                }
                 stash name:'code', includes:'**/*', useDefaultExcludes: false
             }
         }
