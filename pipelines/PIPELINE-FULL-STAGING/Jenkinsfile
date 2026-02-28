@@ -17,13 +17,13 @@ pipeline {
                 script{
                     echo "Dowmload samconfig from repo todo-list-aws-config of branch: staging"
                     sh """
-                        curl -o samconfig.toml \
-                        https://raw.githubusercontent.com/r4kogama/todo-list-aws-config/refs/heads/staging/samconfig.toml
+                        curl -o samconfig.toml https://raw.githubusercontent.com/r4kogama/todo-list-aws-config/refs/heads/staging/samconfig.toml
                         ls -la 
                     """
                 }
                 
-                stash name:'code', includes:'**/*', useDefaultExcludes: false
+                stash name:'samconfig', includes: 'samconfig.toml'
+                stash name:'code', includes:'**/*', excludes: 'samconfig.toml', useDefaultExcludes: false
             }
         }
         stage('Statics') {
@@ -89,6 +89,7 @@ pipeline {
                 catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
                     deleteDir()
                     unstash name:'code'
+                    unstash name: 'samconfig'
                     sh """
                         sam deploy --no-fail-on-empty-changeset --config-env staging --no-confirm-changeset --no-progressbar
                     """
